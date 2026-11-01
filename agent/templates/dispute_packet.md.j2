@@ -1,0 +1,29 @@
+# Deduction Dispute Packet
+
+| Field | Value |
+|---|---|
+| Deduction ID | {{ deduction_number }} (internal ID {{ deduction_id }}) |
+| Retailer | {{ retailer }} |
+| Deduction Type | {{ deduction_type | title }} |
+| Claimed Amount | ${{ "%.2f" | format(claimed_amount) }} |
+| Invoice | {{ invoice_number }} |
+| Purchase Order | {{ po_number }} |
+| Product | {{ product_name }} ({{ product_sku }}) |
+
+## Basis for Dispute
+
+{{ reasoning }}
+
+## Evidence
+
+{% for item in evidence -%}
+- {{ item }}
+{% endfor %}
+
+## Requested Resolution
+
+Please reverse the unsupported deduction of **${{ "%.2f" | format(claimed_amount) }}** and remit the withheld amount.
+
+---
+
+_AI-assisted review. Decision method: {{ method }}. Agent confidence: {{ "%.1f%%" | format(confidence * 100) }}. Source documents and operational records should be retained with this filing._

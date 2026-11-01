@@ -1,0 +1,73 @@
+{
+  "accuracy": {
+    "overall_accuracy": 0.9093333333333333,
+    "invalid_precision": 0.8771551724137931,
+    "invalid_recall": 0.9736842105263158,
+    "invalid_f1": 0.9229024943310657,
+    "count": 750,
+    "human_reviewed": 1,
+    "report_path": "/Users/dhwanilpanchani/Documents/ChatGPT/Glimpse AI Demo/deduction-desk/eval/reports/accuracy_report.md"
+  },
+  "calibration": {
+    "count": 750,
+    "overall_confidence": 0.9292492,
+    "overall_accuracy": 0.9093333333333333,
+    "calibration_gap": 0.01991586666666667,
+    "verdict": "over-confident",
+    "buckets": [
+      {
+        "bucket": "0.6-0.7",
+        "count": 7,
+        "average_confidence": 0.6667,
+        "actual_accuracy": 0.42857142857142855,
+        "gap": 0.2381285714285714
+      },
+      {
+        "bucket": "0.8-0.9",
+        "count": 256,
+        "average_confidence": 0.85,
+        "actual_accuracy": 0.75,
+        "gap": 0.09999999999999998
+      },
+      {
+        "bucket": "0.9-1.0",
+        "count": 487,
+        "average_confidence": 0.9746817248459959,
+        "actual_accuracy": 1.0,
+        "gap": -0.02531827515400409
+      }
+    ],
+    "chart_path": "/Users/dhwanilpanchani/Documents/ChatGPT/Glimpse AI Demo/deduction-desk/eval/reports/calibration_chart.png"
+  },
+  "drift": {
+    "definition_of_pass": "Renamed fields must raise SchemaChangeDetected with missing and present keys; other drift must raise a clear PortalClientError. No scenario may return corrupted deductions.",
+    "passed": 3,
+    "total": 3,
+    "results": [
+      {
+        "scenario": "renamed_field",
+        "description": "claimed_amount renamed to deduction_amt",
+        "expected": "schema_change_detected",
+        "outcome": "schema_change_detected",
+        "passed": true,
+        "message": "SchemaChangeDetected: Portal deduction schema changed: missing expected field(s) [claimed_amount]; response keys present [deduction_amt, id, invoice_id, retailer, retailer_notes, status, type]; missing_fields=['claimed_amount']; present_keys=['deduction_amt', 'id', 'invoice_id', 'retailer', 'retailer_notes', 'status', 'type']"
+      },
+      {
+        "scenario": "pagination_meta",
+        "description": "pagination object renamed to meta",
+        "expected": "graceful_error",
+        "outcome": "graceful_error",
+        "passed": true,
+        "message": "Portal returned an invalid deductions payload"
+      },
+      {
+        "scenario": "extra_auth_step",
+        "description": "deductions endpoint returns 403 and requires retry-token header",
+        "expected": "graceful_error",
+        "outcome": "graceful_error",
+        "passed": true,
+        "message": "Portal request failed: 403 Client Error: None for url: http://mutated-portal.local/api/deductions"
+      }
+    ]
+  }
+}

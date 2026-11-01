@@ -1,0 +1,31 @@
+{
+  "definition_of_pass": "Renamed fields must raise SchemaChangeDetected with missing and present keys; other drift must raise a clear PortalClientError. No scenario may return corrupted deductions.",
+  "passed": 3,
+  "total": 3,
+  "results": [
+    {
+      "scenario": "renamed_field",
+      "description": "claimed_amount renamed to deduction_amt",
+      "expected": "schema_change_detected",
+      "outcome": "schema_change_detected",
+      "passed": true,
+      "message": "SchemaChangeDetected: Portal deduction schema changed: missing expected field(s) [claimed_amount]; response keys present [deduction_amt, id, invoice_id, retailer, retailer_notes, status, type]; missing_fields=['claimed_amount']; present_keys=['deduction_amt', 'id', 'invoice_id', 'retailer', 'retailer_notes', 'status', 'type']"
+    },
+    {
+      "scenario": "pagination_meta",
+      "description": "pagination object renamed to meta",
+      "expected": "graceful_error",
+      "outcome": "graceful_error",
+      "passed": true,
+      "message": "Portal returned an invalid deductions payload"
+    },
+    {
+      "scenario": "extra_auth_step",
+      "description": "deductions endpoint returns 403 and requires retry-token header",
+      "expected": "graceful_error",
+      "outcome": "graceful_error",
+      "passed": true,
+      "message": "Portal request failed: 403 Client Error: None for url: http://mutated-portal.local/api/deductions"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "name": "pagination_meta",
+  "description": "pagination object renamed to meta",
+  "expected": "graceful_error"
+}

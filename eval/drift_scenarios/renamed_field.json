@@ -1,0 +1,5 @@
+{
+  "name": "renamed_field",
+  "description": "claimed_amount renamed to deduction_amt",
+  "expected": "schema_change_detected"
+}

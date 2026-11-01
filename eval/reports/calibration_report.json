@@ -1,0 +1,31 @@
+{
+  "count": 750,
+  "overall_confidence": 0.9292492,
+  "overall_accuracy": 0.9093333333333333,
+  "calibration_gap": 0.01991586666666667,
+  "verdict": "over-confident",
+  "buckets": [
+    {
+      "bucket": "0.6-0.7",
+      "count": 7,
+      "average_confidence": 0.6667,
+      "actual_accuracy": 0.42857142857142855,
+      "gap": 0.2381285714285714
+    },
+    {
+      "bucket": "0.8-0.9",
+      "count": 256,
+      "average_confidence": 0.85,
+      "actual_accuracy": 0.75,
+      "gap": 0.09999999999999998
+    },
+    {
+      "bucket": "0.9-1.0",
+      "count": 487,
+      "average_confidence": 0.9746817248459959,
+      "actual_accuracy": 1.0,
+      "gap": -0.02531827515400409
+    }
+  ],
+  "chart_path": "/Users/dhwanilpanchani/Documents/ChatGPT/Glimpse AI Demo/deduction-desk/eval/reports/calibration_chart.png"
+}

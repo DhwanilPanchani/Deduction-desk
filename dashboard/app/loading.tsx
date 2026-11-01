@@ -1,0 +1,7 @@
+export default function QueueLoading() {
+  return <main className="page-shell" aria-label="Loading review queue" aria-busy="true">
+    <div className="mb-8"><div className="skeleton h-3 w-28 rounded" /><div className="skeleton mt-3 h-9 w-48 rounded-lg" /><div className="skeleton mt-3 h-4 w-[min(520px,85%)] rounded" /></div>
+    <div className="mb-7 grid gap-3 md:grid-cols-3">{[0, 1, 2].map((item) => <div key={item} className="card p-5"><div className="flex justify-between"><div className="skeleton h-3 w-28 rounded" /><div className="skeleton h-9 w-9 rounded-lg" /></div><div className="skeleton mt-4 h-7 w-24 rounded" /><div className="skeleton mt-3 h-3 w-36 rounded" /></div>)}</div>
+    <div className="card overflow-hidden"><div className="flex items-center justify-between border-b border-[var(--line-soft)] px-5 py-5"><div><div className="skeleton h-4 w-28 rounded" /><div className="skeleton mt-2 h-3 w-56 rounded" /></div><div className="skeleton h-8 w-56 rounded-lg" /></div><div className="px-5">{[0, 1, 2, 3, 4].map((row) => <div key={row} className="grid grid-cols-[56px_1fr_1.2fr_.8fr_1fr_1fr] items-center gap-5 border-b border-[var(--line-soft)] py-5 last:border-0"><div className="skeleton h-7 w-7 rounded-full" /><div className="skeleton h-3 w-20 rounded" /><div className="skeleton h-3 w-28 rounded" /><div className="skeleton h-6 w-16 rounded-full" /><div className="skeleton h-4 w-20 rounded" /><div className="skeleton h-2 w-full rounded-full" /></div>)}</div></div>
+  </main>;
+}

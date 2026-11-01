@@ -1,0 +1,5 @@
+{
+  "name": "extra_auth_step",
+  "description": "deductions endpoint returns 403 and requires retry-token header",
+  "expected": "graceful_error"
+}
