@@ -25,6 +25,20 @@ const RETAILERS = ["Walmart", "Target", "Costco", "Kroger"];
 const TYPES = ["shortage", "pricing", "promotional", "compliance", "damage"];
 const STATUSES = ["pending", "disputed", "accepted"];
 
+const TYPE_STYLES: Record<string, string> = {
+  shortage: "border-blue-200 bg-blue-50 text-blue-700",
+  pricing: "border-violet-200 bg-violet-50 text-violet-700",
+  promotional: "border-amber-200 bg-amber-50 text-amber-800",
+  compliance: "border-slate-300 bg-slate-100 text-slate-700",
+  damage: "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  disputed: "border-slate-300 bg-slate-100 text-slate-700",
+  accepted: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
 function readToken() {
   const entry = document.cookie
     .split("; ")
@@ -110,35 +124,63 @@ export default function DeductionsPage() {
 
         {error && <p className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+        <section className="overflow-hidden rounded border border-slate-300 bg-white shadow-sm">
+          <div className="max-h-[70vh] overflow-auto">
+            <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
+              <thead className="sticky top-0 z-10 border-b border-slate-300 bg-slate-200 text-xs uppercase tracking-wide text-slate-700">
                 <tr>
-                  <th className="px-4 py-3">Deduction</th>
-                  <th className="px-4 py-3">Retailer</th>
-                  <th className="px-4 py-3">Invoice</th>
-                  <th className="px-4 py-3">Invoice amount</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Claimed</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Retailer notes</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Deduction</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Retailer</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Invoice</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Invoice amount</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Type</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5 text-right">Claimed</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Status</th>
+                  <th className="border-b border-slate-300 px-4 py-2.5">Retailer notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="text-slate-700">
                 {loading ? (
                   <tr><td className="px-4 py-10 text-center" colSpan={8}>Loading deductions…</td></tr>
                 ) : response?.data.length ? (
-                  response.data.map((deduction) => (
-                    <tr key={deduction.id} className="align-top hover:bg-slate-50">
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{deduction.deduction_number}</td>
-                      <td className="px-4 py-3">{deduction.retailer_name}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{deduction.invoice_number}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{dollars(deduction.invoice_amount)}</td>
-                      <td className="px-4 py-3 capitalize">{deduction.deduction_type}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium">{dollars(deduction.claimed_amount)}</td>
-                      <td className="px-4 py-3 capitalize">{deduction.status}</td>
-                      <td className="max-w-xs px-4 py-3 text-slate-600">{deduction.retailer_notes || "—"}</td>
+                  response.data.map((deduction, index) => (
+                    <tr
+                      key={deduction.id}
+                      className={`align-top border-b border-slate-200 hover:bg-blue-50 ${index % 2 === 1 ? "bg-slate-50" : "bg-white"}`}
+                    >
+                      <td className="whitespace-nowrap px-4 py-2.5 font-medium text-slate-900">{deduction.deduction_number}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5">{deduction.retailer_name}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5">{deduction.invoice_number}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 font-mono tabular-nums">{dollars(deduction.invoice_amount)}</td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={`inline-block rounded border px-2 py-0.5 text-xs font-medium capitalize ${
+                            TYPE_STYLES[deduction.deduction_type] ?? "border-slate-300 bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {deduction.deduction_type}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono tabular-nums font-medium">
+                        {dollars(deduction.claimed_amount)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={`inline-block rounded border px-2 py-0.5 text-xs font-medium capitalize ${
+                            STATUS_STYLES[deduction.status] ?? "border-slate-300 bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {deduction.status}
+                        </span>
+                      </td>
+                      <td className="max-w-xs px-4 py-2.5 text-slate-600">
+                        <span
+                          className="block truncate"
+                          title={deduction.retailer_notes || undefined}
+                        >
+                          {deduction.retailer_notes || "—"}
+                        </span>
+                      </td>
                     </tr>
                   ))
                 ) : (
@@ -167,12 +209,28 @@ function Filter({ label, value, options, onChange }: { label: string; value: str
   return (
     <label className="text-sm font-medium text-slate-700">
       {label}
-      <select className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 capitalize text-slate-900" value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">
-          {label === "Status" ? "All statuses" : `All ${label.toLowerCase()}s`}
-        </option>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
-      </select>
+      <div className="relative mt-1.5">
+        <select
+          className="w-full appearance-none rounded border border-slate-300 bg-white px-3 py-2 pr-8 capitalize text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">
+            {label === "Status" ? "All statuses" : `All ${label.toLowerCase()}s`}
+          </option>
+          {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <svg
+          className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500"
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
     </label>
   );
 }
