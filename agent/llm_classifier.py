@@ -1,4 +1,4 @@
-"""Ollama-backed classifier for deductions with ambiguous retailer notes."""
+"""Classifier for deductions with ambiguous retailer notes backed by pluggable LLM providers."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import requests
 from pydantic import BaseModel, Field, ValidationError
 
 from .config import Settings, settings
+from .llm_provider import LLMProvider, get_provider
 from .models import Deduction, LLMResult
 from policy import COMPLIANCE_LATE_ALLOWANCE_DAYS
 
@@ -20,6 +21,10 @@ class _OllamaDecision(BaseModel):
     is_valid: bool
     confidence: float | None = Field(default=None, ge=0, le=1)
     reasoning: str = Field(min_length=1)
+
+
+# Maintain alias for cleaner naming while preserving backward compatibility
+_LLMDecision = _OllamaDecision
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -39,10 +44,15 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 
 class LLMClassifier:
-    def __init__(self, config: Settings = settings, timeout: float = 90.0) -> None:
+    def __init__(
+        self,
+        config: Settings = settings,
+        provider: LLMProvider | None = None,
+        timeout: float = 90.0,
+    ) -> None:
         self.config = config
         self.timeout = timeout
-        self.session = requests.Session()
+        self.provider = provider or get_provider(config)
 
     def _relevant_context(
         self, deduction: Deduction, context: dict[str, Any]
@@ -156,21 +166,12 @@ Keep reasoning under 40 words.
                     "\nYour prior response was malformed. Return one valid JSON object only."
                 )
             try:
-                response = self.session.post(
-                    f"{self.config.ollama_url}/api/generate",
-                    json={
-                        "model": self.config.ollama_model,
-                        "prompt": attempt_prompt,
-                        "stream": False,
-                        "format": "json",
-                        "options": {"temperature": 0.7},
-                    },
-                    timeout=self.timeout,
+                content = self.provider.call_llm(attempt_prompt, temperature=0.7)
+                parsed = _OllamaDecision.model_validate(_extract_json(content))
+                raw_envelope = self.provider.last_raw_response or json.dumps(
+                    {"response": content}
                 )
-                response.raise_for_status()
-                raw = response.json().get("response", "")
-                parsed = _OllamaDecision.model_validate(_extract_json(raw))
-                return parsed, response.text
+                return parsed, raw_envelope
             except (requests.RequestException, ValueError, ValidationError) as exc:
                 errors.append(f"attempt {attempt + 1}: {exc}")
         raise RuntimeError("; ".join(errors))
@@ -206,12 +207,13 @@ Keep reasoning under 40 words.
                 raw_responses=raw_responses,
             )
 
+        provider_name = self.config.llm_provider.capitalize()
         return LLMResult(
             resolved=False,
-            reasoning="Ollama did not return a usable classification; human review required.",
+            reasoning=f"{provider_name} did not return a usable classification; human review required.",
             raw_responses=raw_responses,
             error="; ".join(errors),
         )
 
     def close(self) -> None:
-        self.session.close()
+        self.provider.close()

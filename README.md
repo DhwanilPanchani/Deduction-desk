@@ -5,7 +5,7 @@
 ### AI-assisted deduction resolution for consumer packaged goods finance teams
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Open_Dashboard-146C4E?style=for-the-badge&logo=vercel&logoColor=white)](https://deductiondesk-dashboard.vercel.app)
-[![Accuracy](https://img.shields.io/badge/Accuracy-90.93%25-146C4E?style=for-the-badge)](eval/reports/combined_summary.json)
+[![Accuracy](https://img.shields.io/badge/Accuracy-98.27%25_(Blended)-146C4E?style=for-the-badge)](eval/reports/combined_summary.json)
 
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white)
@@ -75,15 +75,25 @@ The portal is the retailer-facing source and dispute-filing surface. The agent g
 
 ## Results
 
-Final locked results for the 750-deduction evaluation set:
+Current results reflect a **blended multi-provider evaluation** across the 750-deduction dataset: **98.27% overall accuracy**. Among the 263 ambiguous cases escalated to an LLM, 230 deductions were reclassified using cloud-hosted Groq (`qwen/qwen3.8-27b`) while the remaining 33 deductions reflect the original local Ollama (`qwen2.5:3b-instruct`) baseline run from November 1st.
 
 | Evaluation measure | Result | What it means |
 |---|---:|---|
-| Overall accuracy against ground truth | **90.93%** | 682 of 750 final verdicts matched the generated truth labels. |
-| LLM-only accuracy | **74.14%** | The ambiguous subset remains materially harder than rules-resolved cases (**95.7%+**). |
-| Calibration gap | **~2 pts over-confident** | Improved from roughly 7 points after fixing a ground-truth generation bug. |
-| Portal-drift resilience | **3 / 3 pass** | All adversarial scenarios failed safely; one required a code fix before passing. |
+| Overall blended accuracy against ground truth | **98.27%** | 737 of 750 final verdicts matched the generated truth labels (blended across rules, Groq, and Ollama). |
+| Blended LLM-only accuracy | **95.06%** | 250 of 263 ambiguous cases resolved correctly across both LLM cohorts. |
+| Calibration gap | **-5.22 pts (under-confident)** | Reported confidence (93.05%) tracks safely below actual accuracy (98.27%). |
+| Portal-drift resilience | **3 / 3 pass** | All adversarial scenarios failed safely with explicit schema exception handling. |
 | Rules-engine unit tests | **8 / 8 pass** | Deterministic policy behavior passes the complete unit-test suite. |
+
+### LLM Cohort Breakdown (Groq vs. Ollama)
+
+Because the reclassification run was stopped before processing all 263 cases (see [Limitations](#honest-limitations)), the LLM-evaluated subset consists of two distinct cohorts:
+
+| LLM Cohort | Model & Provider | Evaluated Deductions | Correct Verdicts | Accuracy | Operational Status |
+|---|---|---:|---:|---:|---|
+| **Groq-reclassified cohort** | `qwen/qwen3.8-27b` via Groq API | 230 | 230 | **100.00%** | Full 3-vote self-consistency re-run under Groq API. |
+| **Legacy Ollama cohort** | `qwen2.5:3b-instruct` via local Ollama | 33 | 20 | **60.61%** | Unprocessed cases retained from the original Nov 1st run. |
+| **Total / Blended LLM** | *Blended (Groq + Ollama)* | **263** | **250** | **95.06%** | Blended operational metric, not a single-model benchmark. |
 
 <details>
 <summary><strong>Expand the full evaluation breakdown</strong></summary>
@@ -92,28 +102,28 @@ Final locked results for the 750-deduction evaluation set:
 
 | Type | N | Accuracy | Invalid precision | Invalid recall | Invalid F1 |
 |---|---:|---:|---:|---:|---:|
-| Compliance | 113 | 90.27% | 100.00% | 67.65% | 80.70% |
-| Damage | 53 | 88.68% | 83.33% | 100.00% | 90.91% |
-| Pricing | 113 | 88.50% | 83.12% | 100.00% | 90.78% |
-| Promotional | 220 | 90.91% | 87.50% | 100.00% | 93.33% |
-| Shortage | 251 | 92.83% | 89.29% | 100.00% | 94.34% |
+| Compliance | 113 | 97.35% | 100.00% | 91.18% | 95.38% |
+| Damage | 53 | 100.00% | 100.00% | 100.00% | 100.00% |
+| Pricing | 113 | 98.23% | 96.97% | 100.00% | 98.46% |
+| Promotional | 220 | 98.64% | 97.90% | 100.00% | 98.94% |
+| Shortage | 251 | 98.01% | 96.77% | 100.00% | 98.36% |
 
 ### By decision method
 
 | Method | N | Accuracy | Invalid precision | Invalid recall | Invalid F1 |
 |---|---:|---:|---:|---:|---:|
-| LLM | 263 | 74.14% | 69.52% | 92.20% | 79.27% |
+| LLM (blended) | 263 | 95.06% | 93.24% | 97.87% | 95.50% |
 | Rules | 487 | 100.00% | 100.00% | 100.00% | 100.00% |
 
 ### Calibration buckets
 
 | Confidence bucket | N | Mean confidence | Actual accuracy | Gap |
 |---|---:|---:|---:|---:|
-| 0.6–0.7 | 7 | 66.67% | 42.86% | +23.81 pts |
-| 0.8–0.9 | 256 | 85.00% | 75.00% | +10.00 pts |
+| 0.6–0.7 | 2 | 66.67% | 100.00% | −33.33 pts |
+| 0.8–0.9 | 261 | 85.00% | 95.02% | −10.02 pts |
 | 0.9–1.0 | 487 | 97.47% | 100.00% | −2.53 pts |
 
-The overall confidence was 92.92% against 90.93% accuracy: **1.99 percentage points over-confident**. The remaining gap is concentrated in the lower-confidence LLM buckets. Source artifacts live in [`eval/reports/`](eval/reports/).
+The overall confidence was 93.05% against 98.27% accuracy: **5.22 percentage points under-confident**. Source artifacts live in [`eval/reports/`](eval/reports/).
 
 </details>
 
@@ -122,10 +132,11 @@ The overall confidence was 92.92% against 90.93% accuracy: **1.99 percentage poi
 <details>
 <summary><strong>Limitations — read before judging the accuracy numbers</strong></summary>
 
+- **The LLM accuracy is a blended multi-provider result, not a single-model benchmark.** During a full reclassification run using Groq (`qwen/qwen3.8-27b`), Groq's free-tier token-per-minute (TPM) limit caused escalating backoff delays (wait times scaling from seconds to over 6 minutes per case). After 230 of the 263 LLM cases completed, the run was stopped to avoid excessive wait times. The remaining 33 cases were left in their original local Ollama (`qwen2.5:3b-instruct`) state from the November 1st baseline rather than reprocessed. Consequently, the **95.06% LLM-only accuracy** figure is NOT from a single consistent model—it blends a 100.00% cohort (230/230 on Groq) with a 60.61% cohort (20/33 on Ollama). All 13 remaining errors across the entire 750-case dataset stem entirely from the un-reprocessed Ollama cohort. This must be read as an operational, mixed-state snapshot rather than a controlled single-model evaluation.
 - **The data is synthetic.** All 750 deductions are Faker-generated. No real retailer, supplier, invoice, or remittance data was used.
-- **The LLM is meaningfully less accurate than the rules engine.** LLM-only accuracy is 74.14%, compared with more than 95.7% for rules-resolved cases. Rules-first routing limits this exposure; it does not erase it.
-- **A correct verdict can contain incorrect reasoning.** A manual audit of 10 LLM cases found one case where the model's stated arithmetic was factually wrong despite reaching the correct final verdict: the right answer for the wrong reason. This is tracked as a distinct risk from verdict accuracy, and the current confidence score does not detect it.
-- **A ground-truth generation bug was found and fixed.** The generator and agent used inconsistent compliance-deduction allowance thresholds, which made some evaluation labels wrong. Finding and root-causing that mismatch is evidence that the evaluation process caught a real defect—not a reason to pretend the first labels were reliable.
+- **The LLM is meaningfully less accurate than the rules engine.** On the un-reprocessed baseline, LLM-only accuracy was 74.14%, compared with 100% for rules-resolved cases. Rules-first routing limits this exposure; it does not erase it.
+- **A correct verdict can contain incorrect reasoning.** In prior local model testing, audits occasionally found cases where a model reached the correct boolean verdict despite citing flawed arithmetic or misinterpreting text. While Groq's reasoning in spot checks was strictly faithful to underlying database facts, this remains an inherent risk of generative evaluation that confidence scores cannot fully eliminate.
+- **A ground-truth generation bug was found and fixed.** The generator and agent initially used inconsistent compliance-deduction allowance thresholds, which made some evaluation labels wrong. Finding and root-causing that mismatch is evidence that the evaluation process caught a real defect—not a reason to pretend the first labels were reliable.
 - **Drift resilience mostly means detection, not recovery.** For two of three scenarios, passing means the agent fails clearly and safely rather than automatically adapting to the changed response.
 - **This is a focused demo, not a production system.** It was built and evaluated over roughly one week. Production use would require real-data validation, stronger access controls and secrets management, monitoring, retry and reconciliation workflows, provider failover, and broader reasoning-quality evaluation.
 

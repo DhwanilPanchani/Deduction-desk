@@ -1,33 +1,33 @@
 {
   "accuracy": {
-    "overall_accuracy": 0.9093333333333333,
-    "invalid_precision": 0.8771551724137931,
-    "invalid_recall": 0.9736842105263158,
-    "invalid_f1": 0.9229024943310657,
+    "overall_accuracy": 0.9826666666666667,
+    "invalid_precision": 0.9764705882352941,
+    "invalid_recall": 0.992822966507177,
+    "invalid_f1": 0.9845788849347569,
     "count": 750,
     "human_reviewed": 1,
-    "report_path": "/Users/dhwanilpanchani/Documents/ChatGPT/Glimpse AI Demo/deduction-desk/eval/reports/accuracy_report.md"
+    "report_path": "/Users/dhwanilpanchani/Documents/Repo/Deduction-desk/eval/reports/accuracy_report.md"
   },
   "calibration": {
     "count": 750,
-    "overall_confidence": 0.9292492,
-    "overall_accuracy": 0.9093333333333333,
-    "calibration_gap": 0.01991586666666667,
-    "verdict": "over-confident",
+    "overall_confidence": 0.9304711999999999,
+    "overall_accuracy": 0.9826666666666667,
+    "calibration_gap": -0.052195466666666746,
+    "verdict": "under-confident",
     "buckets": [
       {
         "bucket": "0.6-0.7",
-        "count": 7,
+        "count": 2,
         "average_confidence": 0.6667,
-        "actual_accuracy": 0.42857142857142855,
-        "gap": 0.2381285714285714
+        "actual_accuracy": 1.0,
+        "gap": -0.33330000000000004
       },
       {
         "bucket": "0.8-0.9",
-        "count": 256,
+        "count": 261,
         "average_confidence": 0.85,
-        "actual_accuracy": 0.75,
-        "gap": 0.09999999999999998
+        "actual_accuracy": 0.9501915708812261,
+        "gap": -0.1001915708812261
       },
       {
         "bucket": "0.9-1.0",
@@ -37,7 +37,7 @@
         "gap": -0.02531827515400409
       }
     ],
-    "chart_path": "/Users/dhwanilpanchani/Documents/ChatGPT/Glimpse AI Demo/deduction-desk/eval/reports/calibration_chart.png"
+    "chart_path": "/Users/dhwanilpanchani/Documents/Repo/Deduction-desk/eval/reports/calibration_chart.png"
   },
   "drift": {
     "definition_of_pass": "Renamed fields must raise SchemaChangeDetected with missing and present keys; other drift must raise a clear PortalClientError. No scenario may return corrupted deductions.",
