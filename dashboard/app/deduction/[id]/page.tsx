@@ -101,7 +101,7 @@ export default async function DetailPage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-          <DecisionControls deductionId={Number(detail.id)} agentIsValid={detail.agent_is_valid} />
+          <DecisionControls deductionId={Number(detail.id)} deductionNumber={detail.deduction_number} agentIsValid={detail.agent_is_valid} />
           <section className="card p-5"><h2 className="text-sm font-semibold text-[var(--ink)]">Source references</h2><p className="mt-1 text-xs text-[var(--muted)]">Records attached to this deduction</p><dl className="mt-4 space-y-3.5 text-xs"><Row label="Invoice" value={detail.invoice_number} /><Row label="Purchase order" value={detail.po_number} /><Row label="SKU" value={detail.product_sku} /><Row label="Product" value={detail.product_name} /></dl></section>
         </aside>
       </div>

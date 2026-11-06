@@ -106,6 +106,31 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, summary:focus-vis
 @keyframes success-progress { from { width: 0; } to { width: 100%; } }
 .success-progress { animation: success-progress 1.3s linear forwards; }
 
+@keyframes resolved-banner-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.resolved-banner {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 20px; padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #c0ddd1;
+  background: #edf8f2;
+  color: #1e4d35;
+  font-size: 13px;
+  animation: resolved-banner-in 0.25s ease both;
+  transition: opacity 0.6s ease;
+}
+.resolved-banner-icon {
+  display: grid; place-items: center;
+  height: 22px; width: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0;
+}
+
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }

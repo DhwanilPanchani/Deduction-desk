@@ -3,13 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function DecisionControls({ deductionId, agentIsValid }: { deductionId: number; agentIsValid: boolean }) {
+export default function DecisionControls({
+  deductionId,
+  deductionNumber,
+  agentIsValid,
+}: {
+  deductionId: number;
+  deductionNumber: string;
+  agentIsValid: boolean;
+}) {
   const router = useRouter();
   const [showOverride, setShowOverride] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<{ action: "accepted" | "disputed" } | null>(null);
 
   async function decide(overridden: boolean) {
     if (overridden && !note.trim()) {
@@ -18,6 +26,7 @@ export default function DecisionControls({ deductionId, agentIsValid }: { deduct
     }
     setBusy(true); setError("");
     const finalIsValid = overridden ? !agentIsValid : agentIsValid;
+    const action: "accepted" | "disputed" = finalIsValid ? "accepted" : "disputed";
     try {
       const response = await fetch("/api/decide", {
         method: "POST",
@@ -26,11 +35,11 @@ export default function DecisionControls({ deductionId, agentIsValid }: { deduct
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Decision could not be saved");
-      setSaved(true);
+      setSaved({ action });
       window.setTimeout(() => {
-        router.push("/");
+        router.push(`/?resolved=${encodeURIComponent(deductionNumber)}&action=${action}`);
         router.refresh();
-      }, 1300);
+      }, 1800);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Decision could not be saved");
       setBusy(false);
@@ -38,7 +47,18 @@ export default function DecisionControls({ deductionId, agentIsValid }: { deduct
   }
 
   if (saved) {
-    return <div className="card overflow-hidden" aria-live="polite"><div className="bg-[var(--accent)] px-5 py-6 text-white"><span className="grid h-10 w-10 place-items-center rounded-full bg-white/15"><CheckIcon /></span><h2 className="mt-4 text-base font-semibold">Decision saved</h2><p className="mt-1.5 text-xs leading-5 text-white/75">The audit trail is updated. Returning you to the review queue…</p></div><div className="h-1 bg-[var(--accent-soft)]"><div className="success-progress h-full bg-[var(--accent)]" /></div></div>;
+    const label = saved.action === "accepted" ? "Accepted" : "Disputed";
+    return (
+      <div className="card overflow-hidden" aria-live="polite">
+        <div className="bg-[var(--accent)] px-5 py-6 text-white">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-white/15"><CheckIcon /></span>
+          <h2 className="mt-4 text-base font-semibold">Decision saved — {label}</h2>
+          <p className="mt-1 font-mono text-xs font-semibold text-white/90">{deductionNumber}</p>
+          <p className="mt-2 text-xs leading-5 text-white/70">Audit trail updated. Returning you to the review queue…</p>
+        </div>
+        <div className="h-1 bg-[var(--accent-soft)]"><div className="success-progress h-full bg-[var(--accent)]" style={{ animationDuration: "1.8s" }} /></div>
+      </div>
+    );
   }
 
   return <div className="card overflow-hidden">

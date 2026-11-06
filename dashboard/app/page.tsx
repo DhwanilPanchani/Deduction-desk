@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getQueue } from "@/lib/data";
+import ResolvedBanner from "./ResolvedBanner";
 
 export const instant = false;
 
@@ -17,8 +18,8 @@ const typeStyles: Record<string, string> = {
   freight: "border-cyan-200 bg-cyan-50 text-cyan-700",
 };
 
-export default async function QueuePage({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
-  const { sort = "priority" } = await searchParams;
+export default async function QueuePage({ searchParams }: { searchParams: Promise<{ sort?: string; resolved?: string; action?: string }> }) {
+  const { sort = "priority", resolved, action } = await searchParams;
   const items = await getQueue(sort);
   const totalAtStake = items.reduce((sum, item) => sum + Number(item.claimed_amount), 0);
   const averageConfidence = items.length
@@ -32,6 +33,7 @@ export default async function QueuePage({ searchParams }: { searchParams: Promis
 
   return (
     <main className="page-shell">
+      {resolved && action && <ResolvedBanner deductionNumber={resolved} action={action} />}
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <div className="eyebrow"><span className="eyebrow-line" /> Human review</div>
