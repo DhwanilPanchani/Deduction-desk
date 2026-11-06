@@ -118,3 +118,35 @@ def test_llm_extraction_path_mock(tmp_path: Path, sample_row: dict) -> None:
     assert len(dummy_provider.prompts) == 1
     assert "PO-2601-000999" in dummy_provider.prompts[0]
 
+
+def test_hard_tier_document_and_fallback(tmp_path: Path, sample_row: dict) -> None:
+    generator = DocumentGenerator(output_dir=tmp_path)
+    pdf_file = tmp_path / "hard_memo.pdf"
+    generator.generate_pdf(sample_row, pdf_file, difficulty="hard")
+
+    mock_llm_response = json.dumps(
+        {
+            "po_number": sample_row["po_number"],
+            "invoice_number": sample_row["invoice_number"],
+            "claimed_amount": 125.50,
+            "deduction_type": "shortage",
+            "retailer_notes": sample_row["retailer_notes"],
+        }
+    )
+    dummy_provider = DummyExtractorProvider(mock_llm_response)
+    extractor = DocumentExtractor(provider=dummy_provider)
+
+    # 1. Non-LLM extraction alone fails or is marked unreliable on hard narrative memos
+    non_llm = extractor.extract_non_llm(pdf_file)
+    assert not extractor.is_reliable_extraction(non_llm, non_llm.raw_text)
+
+    # 2. Extract with fallback triggers LLM
+    res, triggered = extractor.extract(pdf_file, run_llm=True)
+    assert triggered is True
+    assert res.extraction_method == "llm"
+    assert res.po_number == sample_row["po_number"]
+    assert res.invoice_number == sample_row["invoice_number"]
+    assert res.claimed_amount == Decimal("125.50")
+    assert res.deduction_type == "shortage"
+
+

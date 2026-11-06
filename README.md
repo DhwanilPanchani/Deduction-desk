@@ -73,6 +73,23 @@ The portal is the retailer-facing source and dispute-filing surface. The agent g
 
 ![DeductionDesk calibration curve showing reported confidence against actual accuracy](eval/reports/calibration_chart.png)
 
+### Document extraction pipeline (hybrid rules/LLM pattern)
+
+> [!NOTE]
+> **Separate Pipeline & Evaluation:** This benchmark evaluates the remittance document-ingestion subsystem (`agent/document_extractor.py`), which is completely separate from the core 750-case deduction-classification pipeline (98.27% blended / 90.93% baseline). It was evaluated on a focused 25-document synthetic remittance sample (13 clean tabular PDFs, 12 hard unstructured narrative memos) using local Ollama (`qwen2.5:3b-instruct`) for the LLM fallback path.
+
+The ingestion engine applies the same two-tier architectural design—deterministic parsing first, escalating to an LLM only when ambiguity or layout breakdown is detected:
+
+- **Non-LLM-only baseline:** Achieves **100.0% exact-match (13/13)** across all four fields on clean, tabular retailer documents (Walmart, Target, Costco, Kroger). However, it drops to **0.0% exact-match (0/12)** on hard, unstructured debit memos because without table grids, `pdfplumber` cannot extract structured rows, causing the regex fallback to naively capture the gross invoice billing figure instead of the true deduction claim.
+- **Hybrid fallback recovery:** When non-LLM parsing detects missing fields or multiple conflicting dollar figures, the pipeline escalates only those cases to an LLM fallback. This recovers hard-tier exact-match accuracy from **0.0% to 58.3% (7/12)**, achieving:
+  - **PO Number:** 91.7% (11/12)
+  - **Invoice Number:** 91.7% (11/12)
+  - **Claimed Amount:** 66.7% (8/12)
+  - **Deduction Type:** 100.0% (12/12)
+- **Zero unnecessary LLM calls:** Clean documents never triggered the LLM (0/13, 0.0%), preserving compute and staying 100% deterministic on structured files. Overall blended accuracy across the 25 documents reached **80.0% (20/25)**.
+
+This demonstrates the same rules-first, LLM-escalation architecture pattern applied to a second, independent problem (document extraction vs. deduction validation), confirming the design choice generalizes rather than being a one-off.
+
 ## Results
 
 Current results reflect a **blended multi-provider evaluation** across the 750-deduction dataset: **98.27% overall accuracy**. Among the 263 ambiguous cases escalated to an LLM, 230 deductions were reclassified using cloud-hosted Groq (`qwen/qwen3.8-27b`) while the remaining 33 deductions reflect the original local Ollama (`qwen2.5:3b-instruct`) baseline run from November 1st.

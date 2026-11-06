@@ -71,10 +71,14 @@ class DocumentGenerator:
         conn.close()
         return [dict(r) for r in rows]
 
-    def generate_pdf(self, row: dict[str, Any], filepath: Path) -> dict[str, Any]:
+    def generate_pdf(
+        self, row: dict[str, Any], filepath: Path, difficulty: str = "clean"
+    ) -> dict[str, Any]:
         """Render a single retailer remittance PDF with retailer-specific styling."""
-        retailer = row["retailer_name"].lower()
+        if difficulty == "hard":
+            return self._render_hard_memo_pdf(row, filepath)
 
+        retailer = row["retailer_name"].lower()
         if "walmart" in retailer:
             return self._render_walmart_pdf(row, filepath)
         elif "target" in retailer:
@@ -169,7 +173,7 @@ class DocumentGenerator:
         )
         elements.append(t)
         doc.build(elements)
-        return self._make_meta(row, filepath, "structured_table")
+        return self._make_meta(row, filepath, layout_type="structured_table", difficulty_tier="clean")
 
     def _render_target_pdf(self, row: dict[str, Any], filepath: Path) -> dict[str, Any]:
         doc = SimpleDocTemplate(
@@ -255,7 +259,7 @@ class DocumentGenerator:
         )
         elements.append(t)
         doc.build(elements)
-        return self._make_meta(row, filepath, "structured_table")
+        return self._make_meta(row, filepath, layout_type="structured_table", difficulty_tier="clean")
 
     def _render_costco_pdf(self, row: dict[str, Any], filepath: Path) -> dict[str, Any]:
         doc = SimpleDocTemplate(
@@ -333,7 +337,7 @@ class DocumentGenerator:
         )
         elements.append(t)
         doc.build(elements)
-        return self._make_meta(row, filepath, "structured_table")
+        return self._make_meta(row, filepath, layout_type="structured_table", difficulty_tier="clean")
 
     def _render_kroger_pdf(self, row: dict[str, Any], filepath: Path) -> dict[str, Any]:
         doc = SimpleDocTemplate(
@@ -412,9 +416,163 @@ class DocumentGenerator:
         )
         elements.append(t)
         doc.build(elements)
-        return self._make_meta(row, filepath, "structured_table")
+        return self._make_meta(row, filepath, layout_type="structured_table", difficulty_tier="clean")
 
-    def _make_meta(self, row: dict[str, Any], filepath: Path, layout_type: str) -> dict[str, Any]:
+    def _render_hard_memo_pdf(self, row: dict[str, Any], filepath: Path) -> dict[str, Any]:
+        """Render an unstructured, narrative discrepancy debit memo (hard tier).
+
+        These documents do not contain formatted tables and use flowing prose with
+        multiple conflicting dollar values (gross invoice, net payment, deduction)
+        and operational jargon to simulate messy real-world retailer remittances.
+        """
+        doc = SimpleDocTemplate(
+            str(filepath),
+            pagesize=letter,
+            leftMargin=40,
+            rightMargin=40,
+            topMargin=40,
+            bottomMargin=40,
+        )
+        styles = getSampleStyleSheet()
+        elements = []
+
+        retailer = row["retailer_name"].lower()
+        if "walmart" in retailer:
+            brand_color = colors.HexColor("#0071CE")
+            header_title = "WALMART INC. — AP DISCREPANCY ADVICE MEMO"
+        elif "target" in retailer:
+            brand_color = colors.HexColor("#CC0000")
+            header_title = "TARGET CORP. — AP SETTLEMENT CHARGEBACK MEMORANDUM"
+        elif "costco" in retailer:
+            brand_color = colors.HexColor("#005DAA")
+            header_title = "COSTCO WHOLESALE — ACCOUNTS PAYABLE DISCREPANCY NOTICE"
+        else:
+            brand_color = colors.HexColor("#1B4998")
+            header_title = "THE KROGER CO. — AP AUDIT & DISPUTE NOTIFICATION"
+
+        header_style = ParagraphStyle(
+            "HardHeader",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            textColor=brand_color,
+            spaceAfter=4,
+        )
+        sub_style = ParagraphStyle(
+            "HardSub",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8,
+            textColor=colors.HexColor("#444444"),
+        )
+        section_style = ParagraphStyle(
+            "HardSection",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            textColor=colors.HexColor("#222222"),
+            spaceBefore=6,
+            spaceAfter=3,
+        )
+        body_style = ParagraphStyle(
+            "HardBody",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#333333"),
+        )
+
+        elements.append(Paragraph(header_title, header_style))
+        elements.append(
+            Paragraph(
+                f"Settlement Ref: <b>{row['remittance_number']}</b> &nbsp;|&nbsp; Date: {row['remittance_date']} &nbsp;|&nbsp; Vendor: {row['brand_name']}",
+                sub_style,
+            )
+        )
+        elements.append(Spacer(1, 8))
+        elements.append(HRFlowable(width="100%", thickness=1.5, color=brand_color, spaceAfter=12))
+
+        claimed = Decimal(str(row["claimed_amount"]))
+        gross = Decimal(str(row.get("invoice_gross") or (claimed * Decimal("3.5"))))
+        paid = gross - claimed
+
+        # Settlement Audit Section (Multiple dollar amounts in prose)
+        elements.append(Paragraph("<b>SETTLEMENT AUDIT BREAKDOWN</b>", section_style))
+        elements.append(
+            Paragraph(
+                f"Original Gross Invoice Billing: <b>${gross:,.2f}</b><br/>"
+                f"Disbursed Settlement Payment: <b>${paid:,.2f}</b><br/>"
+                f"Assessed Deduction Discrepancy: <b>${claimed:,.2f}</b>",
+                body_style,
+            )
+        )
+        elements.append(Spacer(1, 8))
+
+        # References in narrative prose
+        elements.append(Paragraph("<b>TRANSACTION & ORDER REFERENCES</b>", section_style))
+        elements.append(
+            Paragraph(
+                f"This debit memo applies against vendor billing invoice <b>{row['invoice_number']}</b> "
+                f"(dated {row['invoice_date']}), issued under authorized customer purchase order <b>{row['po_number']}</b> "
+                f"(order date {row['order_date']}). Deduction reference number: {row['deduction_number']}.",
+                body_style,
+            )
+        )
+        elements.append(Spacer(1, 8))
+
+        # Discrepancy narrative
+        dtype = str(row["deduction_type"]).lower()
+        if "shortage" in dtype:
+            narrative = (
+                "Receiving Discrepancy: Physical dock receiving count conducted at destination distribution "
+                "center identified a shipment quantity deficit against quantities billed on vendor packing slip. "
+                "Inbound merchandise short-shipped."
+            )
+        elif "pricing" in dtype:
+            narrative = (
+                "Unit Rate Discrepancy: Billed invoice unit price exceeds agreed contract pricing confirmed on "
+                "authorized purchase order line items. Variance deducted from invoice settlement balance."
+            )
+        elif "promo" in dtype:
+            narrative = (
+                "Merchandising Co-Op Promotion: Agreed joint business advertising allowance and weekly circular "
+                "feature promotion credit deducted in accordance with seasonal marketing agreement."
+            )
+        elif "compl" in dtype:
+            narrative = (
+                "Logistics Vendor Compliance Fee: Inbound carrier missed scheduled appointment arrival window and "
+                "ASN electronic advance delivery notification was late. OTIF operational penalty assessed."
+            )
+        elif "damage" in dtype:
+            narrative = (
+                "Damaged Product Notice: Receiving inspector identified compromised product packaging, crushed "
+                "master cases, and unsaleable merchandise rejected at receiving dock."
+            )
+        else:
+            narrative = f"Audit Discrepancy: Assessed deduction chargeback under category {dtype}."
+
+        elements.append(Paragraph("<b>DISCREPANCY FINDINGS & AUDIT JUSTIFICATION</b>", section_style))
+        elements.append(Paragraph(narrative, body_style))
+        elements.append(Spacer(1, 8))
+
+        notes = (
+            row.get("retailer_notes")
+            or "Automated accounts payable audit discrepancy applied per trading agreement."
+        )
+        elements.append(Paragraph("<b>AUDITOR NOTES & REMARKS</b>", section_style))
+        elements.append(Paragraph(str(notes), body_style))
+
+        doc.build(elements)
+        return self._make_meta(row, filepath, layout_type="narrative_memo", difficulty_tier="hard")
+
+    def _make_meta(
+        self,
+        row: dict[str, Any],
+        filepath: Path,
+        layout_type: str,
+        difficulty_tier: str = "clean",
+    ) -> dict[str, Any]:
         return {
             "deduction_id": row["deduction_id"],
             "deduction_number": row["deduction_number"],
@@ -427,19 +585,35 @@ class DocumentGenerator:
             "claimed_amount": float(row["claimed_amount"]),
             "retailer_notes": row["retailer_notes"],
             "layout_type": layout_type,
+            "difficulty_tier": difficulty_tier,
         }
 
-    def generate_batch(self, count: int = 25) -> list[dict[str, Any]]:
-        """Generate N synthetic PDFs and save ground truth metadata index."""
+    def generate_batch(self, count: int = 25, split_tiers: bool = True) -> list[dict[str, Any]]:
+        """Generate N synthetic PDFs and save ground truth metadata index.
+
+        When split_tiers=True, generates a mixed-difficulty set:
+        - Clean tier: structured tabular remittances
+        - Hard tier: unstructured narrative discrepancy memos
+        """
         rows = self.fetch_sample_deductions(limit=count)
         metadata_list: list[dict[str, Any]] = []
 
-        for row in rows:
+        # Clean existing remittance PDFs in output_dir to prevent orphan files
+        for old_pdf in self.output_dir.glob("remittance_*.pdf"):
+            try:
+                old_pdf.unlink()
+            except OSError:
+                pass
+
+        half = (len(rows) + 1) // 2
+
+        for idx, row in enumerate(rows):
+            tier = "clean" if (not split_tiers or idx < half) else "hard"
             filename = (
-                f"remittance_deduction_{row['deduction_id']:04d}_{row['retailer_code']}.pdf"
+                f"remittance_deduction_{row['deduction_id']:04d}_{row['retailer_code']}_{tier}.pdf"
             )
             filepath = self.output_dir / filename
-            meta = self.generate_pdf(row, filepath)
+            meta = self.generate_pdf(row, filepath, difficulty=tier)
             metadata_list.append(meta)
 
         # Write ground truth JSON index

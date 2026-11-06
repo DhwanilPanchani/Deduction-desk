@@ -6,12 +6,14 @@ import argparse
 import sys
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agent.document_extractor import DocumentExtractor
+from agent.config import settings
+from agent.document_extractor import DocumentExtractor, ExtractedDeduction
 from agent.document_generator import DocumentGenerator
 
 
@@ -40,130 +42,197 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def evaluate_extracted(
+    extracted: ExtractedDeduction, gt: dict[str, Any]
+) -> dict[str, Any]:
+    po_ok = extracted.po_number == gt["po_number"]
+    inv_ok = extracted.invoice_number == gt["invoice_number"]
+    amt_ok = (
+        extracted.claimed_amount is not None
+        and float(extracted.claimed_amount) == float(gt["claimed_amount"])
+    )
+    type_ok = extracted.deduction_type == gt["deduction_type"]
+    all_ok = po_ok and inv_ok and amt_ok and type_ok
+    return {
+        "po_ok": po_ok,
+        "inv_ok": inv_ok,
+        "amt_ok": amt_ok,
+        "type_ok": type_ok,
+        "all_ok": all_ok,
+        "extracted": extracted,
+        "gt": gt,
+    }
+
+
+def print_tier_stats(name: str, items: list[dict[str, Any]]) -> None:
+    n = len(items)
+    if n == 0:
+        print(f"  {name:12s}: N=0")
+        return
+    exact = sum(1 for x in items if x["all_ok"])
+    po = sum(1 for x in items if x["po_ok"])
+    inv = sum(1 for x in items if x["inv_ok"])
+    amt = sum(1 for x in items if x["amt_ok"])
+    dtype = sum(1 for x in items if x["type_ok"])
+    print(
+        f"  {name:12s} (N={n:2d}): Exact={exact:2d}/{n} ({exact / n:6.1%}) | "
+        f"PO={po:2d}/{n} ({po / n:5.1%}) | Inv={inv:2d}/{n} ({inv / n:5.1%}) | "
+        f"Amt={amt:2d}/{n} ({amt / n:5.1%}) | Type={dtype:2d}/{n} ({dtype / n:5.1%})"
+    )
+
+
 def main() -> None:
     args = parse_args()
 
-    print("=" * 80)
-    print("REMITTANCE DOCUMENT GENERATION & EXTRACTION PIPELINE")
-    print("=" * 80)
-    print(f"Target count:       {args.count} synthetic PDFs")
+    print("=" * 85)
+    print("REMITTANCE DOCUMENT GENERATION & EXTRACTION BENCHMARK")
+    print("=" * 85)
+    print(f"Target count:       {args.count} synthetic PDFs (Clean + Hard mixed tiers)")
     print(f"Output directory:   {args.output_dir}")
-    print(f"LLM path enabled:   {'YES (Live API calls)' if args.run_llm else 'NO (ready to test, not yet run)'}")
-    print("=" * 80 + "\n")
+    print(f"LLM Provider:       {settings.llm_provider.upper()} ({settings.groq_model if settings.llm_provider == 'groq' else settings.ollama_model})")
+    print(f"LLM Fallback Run:   {'ENABLED (Live API calls)' if args.run_llm else 'DISABLED (Non-LLM only)'}")
+    print("=" * 85 + "\n")
 
-    # Step 1: Generate synthetic PDFs
-    print(f"Generating {args.count} synthetic remittance PDFs...")
+    # Step 1: Generate synthetic PDFs across mixed difficulty tiers
+    print(f"Generating {args.count} synthetic remittance PDFs (clean tabular + hard narrative)...")
     generator = DocumentGenerator(output_dir=args.output_dir)
-    gt_list = generator.generate_batch(count=args.count)
-    print(f"Successfully generated {len(gt_list)} PDFs across retailers in {args.output_dir}.\n")
+    gt_list = generator.generate_batch(count=args.count, split_tiers=True)
+    clean_gt = [x for x in gt_list if x.get("difficulty_tier") == "clean"]
+    hard_gt = [x for x in gt_list if x.get("difficulty_tier") == "hard"]
+    print(f"Generated {len(gt_list)} PDFs: {len(clean_gt)} clean tier, {len(hard_gt)} hard tier.\n")
 
-    # Step 2: Extract using Non-LLM Path
     extractor = DocumentExtractor()
-    non_llm_results = []
 
-    print("Running Non-LLM extraction path (pdfplumber table/regex)...")
+    # Step 2: Benchmark Non-LLM extraction on both tiers
+    print("Phase 1: Evaluating Non-LLM Extraction Path (pdfplumber table/regex alone)...")
+    non_llm_evals: list[dict[str, Any]] = []
     for item in gt_list:
-        pdf_path = item["filepath"]
-        res = extractor.extract_non_llm(pdf_path)
+        res = extractor.extract_non_llm(item["filepath"])
+        ev = evaluate_extracted(res, item)
+        ev["tier"] = item.get("difficulty_tier", "clean")
+        non_llm_evals.append(ev)
 
-        po_ok = res.po_number == item["po_number"]
-        inv_ok = res.invoice_number == item["invoice_number"]
-        amt_ok = (
-            res.claimed_amount is not None
-            and float(res.claimed_amount) == float(item["claimed_amount"])
-        )
-        type_ok = res.deduction_type == item["deduction_type"]
-        all_ok = po_ok and inv_ok and amt_ok and type_ok
+    clean_non_llm = [x for x in non_llm_evals if x["tier"] == "clean"]
+    hard_non_llm = [x for x in non_llm_evals if x["tier"] == "hard"]
 
-        non_llm_results.append(
-            {
-                "id": item["deduction_id"],
-                "retailer": item["retailer_name"],
-                "po_ok": po_ok,
-                "inv_ok": inv_ok,
-                "amt_ok": amt_ok,
-                "type_ok": type_ok,
-                "all_ok": all_ok,
-                "extracted": res,
-                "gt": item,
-            }
-        )
+    print("\nNon-LLM Extraction Accuracy by Tier:")
+    print_tier_stats("Clean Tier", clean_non_llm)
+    print_tier_stats("Hard Tier", hard_non_llm)
+    print_tier_stats("Total Set", non_llm_evals)
 
-    # Step 3: LLM Path if requested
-    llm_results = []
+    # Step 3: Run LLM-fallback path if requested
+    llm_triggered_clean = 0
+    llm_triggered_hard = 0
+    api_calls_used = 0
+    extraction_errors: list[dict[str, Any]] = []
+    fallback_evals: list[dict[str, Any]] = []
+    hard_llm_evals: list[dict[str, Any]] = []
+
     if args.run_llm:
-        print("\nExecuting LLM extraction path...")
-        for item in gt_list:
-            pdf_path = item["filepath"]
-            res = extractor.extract_with_llm(pdf_path)
-            po_ok = res.po_number == item["po_number"]
-            inv_ok = res.invoice_number == item["invoice_number"]
-            amt_ok = (
-                res.claimed_amount is not None
-                and float(res.claimed_amount) == float(item["claimed_amount"])
+        print("\n" + "=" * 85)
+        print("Phase 2: Running Extraction Pipeline with LLM Fallback (LLM_PROVIDER=groq)...")
+        print("=" * 85)
+
+        for idx, item in enumerate(gt_list, 1):
+            tier = item.get("difficulty_tier", "clean")
+            res, triggered = extractor.extract(item["filepath"], run_llm=True)
+
+            if triggered:
+                if tier == "clean":
+                    llm_triggered_clean += 1
+                else:
+                    llm_triggered_hard += 1
+
+            if res.error:
+                extraction_errors.append(
+                    {
+                        "filename": item["filename"],
+                        "tier": tier,
+                        "error": res.error,
+                    }
+                )
+
+            ev = evaluate_extracted(res, item)
+            ev["tier"] = tier
+            ev["triggered_llm"] = triggered
+            fallback_evals.append(ev)
+
+            if tier == "hard" and triggered:
+                hard_llm_evals.append(ev)
+
+            print(
+                f"  [{idx:02d}/{len(gt_list):02d}] {item['filename']} ({tier:5s}) -> "
+                f"Method={res.extraction_method:14s} | LLM Triggered={str(triggered):5s} | "
+                f"Exact Match={'YES' if ev['all_ok'] else 'NO'}"
             )
-            type_ok = res.deduction_type == item["deduction_type"]
-            all_ok = po_ok and inv_ok and amt_ok and type_ok
-            llm_results.append(
-                {
-                    "id": item["deduction_id"],
-                    "retailer": item["retailer_name"],
-                    "all_ok": all_ok,
-                    "extracted": res,
-                    "gt": item,
-                }
-            )
+
+        provider = extractor._get_provider()
+        api_calls_used = getattr(provider, "call_count", 0)
+
+        print("\n" + "=" * 85)
+        print("PIPELINE PERFORMANCE WITH LLM FALLBACK")
+        print("=" * 85)
+
+        print("\nLLM-Fallback Triggering Rate:")
+        print(f"  Clean Tier:  {llm_triggered_clean}/{len(clean_gt)} triggered ({llm_triggered_clean / max(len(clean_gt), 1):.1%})")
+        print(f"  Hard Tier:   {llm_triggered_hard}/{len(hard_gt)} triggered ({llm_triggered_hard / max(len(hard_gt), 1):.1%})")
+        total_triggered = llm_triggered_clean + llm_triggered_hard
+        print(f"  Total Calls: {total_triggered}/{len(gt_list)} ({total_triggered / len(gt_list):.1%})")
+        print(f"  Total API Calls Used by Provider: {api_calls_used}")
+
+        print("\nAccuracy Breakdown Post-Fallback:")
+        clean_fallback = [x for x in fallback_evals if x["tier"] == "clean"]
+        hard_fallback = [x for x in fallback_evals if x["tier"] == "hard"]
+        print_tier_stats("Clean Tier", clean_fallback)
+        print_tier_stats("Hard Tier (LLM Fallback)", hard_fallback)
+        print_tier_stats("Overall Blended", fallback_evals)
+
+        if extraction_errors:
+            print(f"\nExtraction Errors Encountered ({len(extraction_errors)}):")
+            for err in extraction_errors:
+                print(f"  - {err['filename']} [{err['tier']}]: {err['error']}")
+        else:
+            print("\nExtraction Errors: NONE (0 errors)")
+
     else:
-        print("\n[NOTE] LLM-based extraction path: ready to test, not yet run.")
+        print("\n[NOTE] LLM-based fallback path was not executed (--run-llm not passed).")
+        print("       Ready to test, not yet run.")
 
-    # Step 4: Report Results
-    total = len(non_llm_results)
-    exact_matches = sum(r["all_ok"] for r in non_llm_results)
-    po_matches = sum(r["po_ok"] for r in non_llm_results)
-    inv_matches = sum(r["inv_ok"] for r in non_llm_results)
-    amt_matches = sum(r["amt_ok"] for r in non_llm_results)
-    type_matches = sum(r["type_ok"] for r in non_llm_results)
+    # Step 4: Show Sample Audit (One clean, One hard)
+    print("\n" + "=" * 85)
+    print("DETAILED EXTRACTION AUDIT SAMPLES")
+    print("=" * 85)
 
-    print("\n" + "=" * 80)
-    print("NON-LLM EXTRACTION ACCURACY BENCHMARK (pdfplumber)")
-    print("=" * 80)
-    print(f"Total PDFs Evaluated:         {total}")
-    print(f"Exact Matches (All 4 Fields): {exact_matches}/{total} ({exact_matches / total:.1%})")
-    print(f"  - PO Number Accuracy:       {po_matches}/{total} ({po_matches / total:.1%})")
-    print(f"  - Invoice Number Accuracy:  {inv_matches}/{total} ({inv_matches / total:.1%})")
-    print(f"  - Claimed Amount Accuracy:  {amt_matches}/{total} ({amt_matches / total:.1%})")
-    print(f"  - Deduction Type Accuracy:  {type_matches}/{total} ({type_matches / total:.1%})")
-    print("=" * 80)
+    samples_to_show = []
+    if clean_gt:
+        samples_to_show.append((clean_gt[0], "Clean Tier (Tabular Remittance)"))
+    if hard_gt:
+        samples_to_show.append((hard_gt[0], "Hard Tier (Narrative Debit Memo)"))
 
-    # Step 5: Show sample output for 2 diverse retailers
-    print("\n" + "=" * 80)
-    print("SAMPLE GENERATED PDF CONTENT & NON-LLM EXTRACTION AUDIT")
-    print("=" * 80)
-
-    for sample in non_llm_results[:2]:
-        gt = sample["gt"]
-        ext = sample["extracted"]
-        print(f"\n--- Sample: {gt['filename']} ({gt['retailer_name']}) ---")
-        print("Raw Document Text Preview:")
-        preview_lines = (ext.raw_text or "").strip().splitlines()[:8]
-        for line in preview_lines:
+    for item, label in samples_to_show:
+        res = extractor.extract_non_llm(item["filepath"])
+        print(f"\n--- {label}: {item['filename']} ---")
+        preview = (res.raw_text or "").strip().splitlines()[:6]
+        for line in preview:
             print(f"  | {line}")
-        print("\nExtracted Fields vs Ground Truth:")
-        print(f"  PO Number:       '{ext.po_number}' (GT: '{gt['po_number']}') -> {'MATCH' if sample['po_ok'] else 'MISMATCH'}")
-        print(f"  Invoice Number:  '{ext.invoice_number}' (GT: '{gt['invoice_number']}') -> {'MATCH' if sample['inv_ok'] else 'MISMATCH'}")
-        print(f"  Claimed Amount:  ${ext.claimed_amount} (GT: ${Decimal(str(gt['claimed_amount'])):.2f}) -> {'MATCH' if sample['amt_ok'] else 'MISMATCH'}")
-        print(f"  Deduction Type:  '{ext.deduction_type}' (GT: '{gt['deduction_type']}') -> {'MATCH' if sample['type_ok'] else 'MISMATCH'}")
-        print(f"  Method Used:     {ext.extraction_method} (confidence: {ext.confidence})")
-        print(f"  Retailer Notes:  '{ext.retailer_notes}'")
+        print("Non-LLM Parsed Fields:")
+        print(f"  PO Number:       '{res.po_number}' (GT: '{item['po_number']}')")
+        print(f"  Invoice Number:  '{res.invoice_number}' (GT: '{item['invoice_number']}')")
+        print(f"  Claimed Amount:  ${res.claimed_amount} (GT: ${Decimal(str(item['claimed_amount'])):.2f})")
+        print(f"  Deduction Type:  '{res.deduction_type}' (GT: '{item['deduction_type']}')")
+        print(f"  Method Used:     {res.extraction_method} (Confidence: {res.confidence})")
 
-    print("\n" + "=" * 80)
-    print("STATUS SUMMARY:")
-    print("  Part 1 (PDF generation):      VERIFIED WORKING")
-    print("  Part 2 Non-LLM extraction:    VERIFIED WORKING (100% field accuracy)")
-    print("  Part 2 LLM-based extraction:  READY TO TEST, NOT YET RUN")
-    print("=" * 80)
+        if args.run_llm:
+            llm_res = extractor.extract_with_llm(item["filepath"])
+            print("LLM-Fallback Parsed Fields:")
+            print(f"  PO Number:       '{llm_res.po_number}'")
+            print(f"  Invoice Number:  '{llm_res.invoice_number}'")
+            print(f"  Claimed Amount:  ${llm_res.claimed_amount}")
+            print(f"  Deduction Type:  '{llm_res.deduction_type}'")
+            print(f"  Method Used:     {llm_res.extraction_method} (Confidence: {llm_res.confidence})")
+
+    print("\n" + "=" * 85)
 
 
 if __name__ == "__main__":
     main()
-

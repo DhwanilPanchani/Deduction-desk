@@ -236,11 +236,51 @@ Extract the exact fields and return strict JSON only:
 }}
 """
 
-    def extract_with_llm(self, pdf_path: Path | str) -> ExtractedDeduction:
-        """Extract structured fields using an LLM provider.
+    def is_reliable_extraction(
+        self, extracted: ExtractedDeduction, raw_text: str | None = None
+    ) -> bool:
+        """Determine if non-LLM extraction is reliable and unambiguous."""
+        # 1. Must have all 4 core fields
+        if not (
+            extracted.po_number
+            and extracted.invoice_number
+            and extracted.claimed_amount is not None
+            and extracted.deduction_type
+        ):
+            return False
 
-        NOTE: Ready to test, not yet run.
+        # 2. If it came from a table extraction, it has high structure confidence
+        if extracted.extraction_method == "table" and extracted.confidence >= 0.90:
+            return True
+
+        # 3. If it fell back to regex, check if the raw text has multiple competing dollar amounts
+        if raw_text:
+            dollar_amounts = re.findall(r"\$\s*[0-9,]+(?:\.[0-9]{2})?", raw_text)
+            if len(dollar_amounts) > 1:
+                return False
+
+        return extracted.confidence >= 0.90
+
+    def extract(
+        self, pdf_path: Path | str, run_llm: bool = False
+    ) -> tuple[ExtractedDeduction, bool]:
+        """Extract deduction fields, falling back to LLM if non-LLM is incomplete or ambiguous.
+
+        Returns: (ExtractedDeduction, llm_triggered: bool)
         """
+        non_llm = self.extract_non_llm(pdf_path)
+
+        if self.is_reliable_extraction(non_llm, non_llm.raw_text):
+            return non_llm, False
+
+        if run_llm:
+            llm_res = self.extract_with_llm(pdf_path)
+            return llm_res, True
+
+        return non_llm, False
+
+    def extract_with_llm(self, pdf_path: Path | str) -> ExtractedDeduction:
+        """Extract structured fields using an LLM provider."""
         path = Path(pdf_path)
         raw_text_parts: list[str] = []
         with pdfplumber.open(path) as pdf:
@@ -253,16 +293,25 @@ Extract the exact fields and return strict JSON only:
         prompt = self.build_llm_prompt(raw_text)
         provider = self._get_provider()
 
-        response_str = provider.call_llm(prompt, temperature=0.0)
-        parsed_dict = _extract_json(response_str)
+        try:
+            response_str = provider.call_llm(prompt, temperature=0.0)
+            parsed_dict = _extract_json(response_str)
 
-        return ExtractedDeduction(
-            po_number=parsed_dict.get("po_number"),
-            invoice_number=parsed_dict.get("invoice_number"),
-            claimed_amount=_clean_amount(parsed_dict.get("claimed_amount")),
-            deduction_type=_normalize_type(parsed_dict.get("deduction_type")),
-            retailer_notes=parsed_dict.get("retailer_notes"),
-            extraction_method="llm",
-            raw_text=raw_text,
-            confidence=0.90,
-        )
+            return ExtractedDeduction(
+                po_number=parsed_dict.get("po_number"),
+                invoice_number=parsed_dict.get("invoice_number"),
+                claimed_amount=_clean_amount(parsed_dict.get("claimed_amount")),
+                deduction_type=_normalize_type(parsed_dict.get("deduction_type")),
+                retailer_notes=parsed_dict.get("retailer_notes"),
+                extraction_method="llm",
+                raw_text=raw_text,
+                confidence=0.95,
+            )
+        except Exception as e:
+            logger.error("LLM extraction failed for %s: %s", path.name, e)
+            return ExtractedDeduction(
+                extraction_method="llm",
+                raw_text=raw_text,
+                confidence=0.0,
+                error=str(e),
+            )
