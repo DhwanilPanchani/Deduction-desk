@@ -86,7 +86,11 @@ export default async function QueuePage({ searchParams }: { searchParams: Promis
                       <td className="px-4 py-4 font-medium text-[var(--ink)]">{item.retailer}</td>
                       <td className="px-4 py-4"><TypeBadge type={item.type} /></td>
                       <td className="px-4 py-4 text-right font-mono text-sm font-semibold tabular-nums text-[var(--ink)]">{money(item.claimed_amount)}</td>
-                      <td className="px-4 py-4"><span className="badge badge-warning">Dispute</span></td>
+                      <td className="px-4 py-4">
+                        {item.agent_is_valid
+                          ? <span className="badge border border-emerald-200 bg-emerald-50 text-emerald-800">Accept</span>
+                          : <span className="badge badge-warning">Dispute</span>}
+                      </td>
                       <td className="px-4 py-4"><ConfidenceBar value={Number(item.confidence)} /></td>
                       <td className="px-5 py-4 text-right"><Link href={`/deduction/${item.id}`} className="review-link">Review <ArrowIcon /></Link></td>
                     </tr>

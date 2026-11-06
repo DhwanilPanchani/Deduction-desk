@@ -20,6 +20,15 @@ export const REVIEW_DDL = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (deduction_id, call_number)
   );
+  CREATE TABLE IF NOT EXISTS extracted_documents (
+    id BIGSERIAL PRIMARY KEY,
+    deduction_id BIGINT NOT NULL UNIQUE REFERENCES deductions(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    difficulty_tier TEXT NOT NULL,
+    layout_type TEXT NOT NULL,
+    extraction_method TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
 `;
 
 let schemaReady: Promise<void> | null = null;
@@ -69,7 +78,6 @@ export async function getQueue(sort = "priority"): Promise<QueueItem[]> {
     LEFT JOIN disputes dp ON dp.deduction_id=d.id
     LEFT JOIN human_reviews hr ON hr.deduction_id=d.id
     WHERE ad.needs_human_review=TRUE
-      AND ad.is_valid=FALSE
       AND dp.id IS NULL
       AND hr.id IS NULL
     ORDER BY ${orderBy}
@@ -89,13 +97,15 @@ export async function getDeductionDetail(id: number) {
             po.po_number, po.product_sku, po.product_name, po.unit_price AS po_unit_price,
             po.expected_delivery_date, pod.delivered_qty, pod.damaged_qty,
             pod.delivery_date, promo.promotion_name, promo.discount_percent,
-            promo.start_date AS promotion_start_date, promo.end_date AS promotion_end_date
+            promo.start_date AS promotion_start_date, promo.end_date AS promotion_end_date,
+            ed.extraction_method, ed.difficulty_tier, ed.filename AS document_filename
      FROM deductions d
      JOIN agent_decisions ad ON ad.deduction_id=d.id
      JOIN invoices i ON i.id=d.invoice_id
      JOIN purchase_orders po ON po.id=i.purchase_order_id
      JOIN retailers r ON r.id=po.retailer_id
      JOIN proof_of_delivery pod ON pod.purchase_order_id=po.id
+     LEFT JOIN extracted_documents ed ON ed.deduction_id=d.id
      LEFT JOIN LATERAL (
        SELECT tp.promotion_name, tp.discount_percent, tp.start_date, tp.end_date
        FROM trade_promotions tp

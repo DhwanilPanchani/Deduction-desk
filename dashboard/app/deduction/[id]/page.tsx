@@ -29,7 +29,23 @@ export default async function DetailPage({ params }: { params: Promise<{ id: str
 
       <header className="mt-5 flex flex-col justify-between gap-5 border-b border-[var(--line)] pb-7 sm:flex-row sm:items-end">
         <div>
-          <div className="flex items-center gap-2.5"><span className="font-mono text-xs font-semibold text-[var(--muted)]">{detail.deduction_number}</span><span className="badge border border-[var(--line)] bg-white capitalize text-[var(--ink-soft)]">{detail.type}</span></div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="font-mono text-xs font-semibold text-[var(--muted)]">{detail.deduction_number}</span>
+            <span className="badge border border-[var(--line)] bg-white capitalize text-[var(--ink-soft)]">{detail.type}</span>
+            {detail.extraction_method && (
+              <span
+                className={`badge border ${
+                  detail.extraction_method === "llm"
+                    ? "border-amber-200 bg-amber-50 text-amber-900"
+                    : "border-[var(--line)] bg-white text-[var(--ink-soft)]"
+                }`}
+              >
+                {detail.extraction_method === "llm"
+                  ? "Extracted via AI fallback (document unreadable by standard parser)"
+                  : "Extracted via document parser"}
+              </span>
+            )}
+          </div>
           <h1 className="mt-3 text-[30px] font-semibold tracking-[-0.035em] text-[var(--ink)] sm:text-[34px]">{detail.retailer}</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">Claimed {shortDate(detail.claim_date)} against invoice <span className="font-medium text-[var(--ink-soft)]">{detail.invoice_number}</span></p>
         </div>

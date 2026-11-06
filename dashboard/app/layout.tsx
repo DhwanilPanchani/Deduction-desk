@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-white/95 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 sm:px-6 lg:px-10">
             <Link href="/" className="flex items-center gap-3 no-underline">
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Link>
             <div className="flex items-center gap-2 rounded-full border border-[#d7e7df] bg-[#f3faf6] px-3 py-1.5 text-[11px] font-semibold text-[#315d4b]">
               <span className="grid h-4 w-4 place-items-center rounded-full bg-[#dcefe6] text-[var(--accent)]"><svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 6.2 1.8 1.8L9 3.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-              <span className="hidden sm:inline">Eval verified · 90.93% accuracy</span>
+              <span className="hidden sm:inline">Eval verified · 98.27% accuracy</span>
               <span className="sm:hidden">Verified</span>
             </div>
           </div>
